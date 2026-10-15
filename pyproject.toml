@@ -1,0 +1,11 @@
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+addopts = "--import-mode=importlib"
+pythonpath = [".", "services/api", "services/deployer", "services/monitor", "models/sentiment"]
+testpaths = ["services", "models/sentiment", "tests"]

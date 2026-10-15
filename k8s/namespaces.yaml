@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mdmp-platform
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mdmp-models
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mdmp-monitoring
