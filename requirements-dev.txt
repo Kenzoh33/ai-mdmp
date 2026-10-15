@@ -1,0 +1,6 @@
+-r services/api/requirements.txt
+-r services/deployer/requirements.txt
+-r services/monitor/requirements.txt
+-r models/sentiment/requirements.txt
+pytest>=8.0
+ruff>=0.6

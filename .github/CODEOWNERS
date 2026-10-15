@@ -1,0 +1,12 @@
+*                    @Kenzoh33
+/services/api/       @MEMBER_A_USERNAME
+/frontend/           @MEMBER_A_USERNAME
+/common/             @MEMBER_A_USERNAME
+/services/monitor/   @MEMBER_B_USERNAME
+/tests/              @MEMBER_B_USERNAME
+/services/deployer/  @Kenzoh33
+/models/             @Kenzoh33
+/loadgen/            @Kenzoh33
+/.github/            @Kenzoh33
+/k8s/                @Kenzoh33
+/k8s/monitoring/     @MEMBER_B_USERNAME
