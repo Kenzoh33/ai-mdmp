@@ -1,10 +1,16 @@
-"""api service. Owner and contract: see .github/CODEOWNERS and docs/CONTRACTS.md."""
-
 from fastapi import FastAPI
+from common.llm import llm_client
+from services.api.mdmp_api.database import engine, Base
 
-app = FastAPI(title="AI-MDMP api")
+Base.metadata.create_all(bind=engine)
 
+app = FastAPI(title="AI-MDMP API Service", version="1.0.0")
 
-@app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok", "service": "api"}
+@app.get("/api/v1/health")
+def health_check():
+    return {"status": "healthy", "service": "api"}
+
+@app.get("/api/v1/mock-llm-test")
+async def test_llm():
+    response = await llm_client.get_response("Are you running in mock mode?")
+    return {"llm_response": response}
