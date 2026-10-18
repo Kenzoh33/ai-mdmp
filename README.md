@@ -2,7 +2,7 @@
 
 | Area | Owner |
 | --- | --- |
-| Steps 1, 4: `services/api`, `common/`, `frontend/` | Member A |
+| Steps 1, 4: `services/api`, `common/`, `frontend/` | Shane Marks |
 | Steps 3, 5: `services/monitor`, `k8s/monitoring`, `tests/` | Member B |
 | Steps 2, 6: `services/deployer`, `models/`, `k8s/`, CI/CD | Rochak Ghimire |
 
