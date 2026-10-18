@@ -1,0 +1,77 @@
+# Canary track of the sentiment model: the broken v2 with injected latency and errors.
+#   kind load docker-image ai-mdmp-sentiment:v2 --name mdmp
+#   kubectl apply -f k8s/models/sentiment-canary.yaml
+# Same selector rule as the stable track: app + track, never version.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sentiment-canary
+  namespace: mdmp-models
+  labels:
+    app: sentiment
+    version: v2
+    track: canary
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sentiment
+      track: canary
+  template:
+    metadata:
+      labels:
+        app: sentiment
+        version: v2
+        track: canary
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: /metrics
+    spec:
+      containers:
+        - name: sentiment
+          image: ai-mdmp-sentiment:v2
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: EXTRA_LATENCY_MS
+              value: "300"
+            - name: ERROR_RATE
+              value: "0.2"
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sentiment-canary
+  namespace: mdmp-models
+  labels:
+    app: sentiment
+    track: canary
+spec:
+  selector:
+    app: sentiment
+    track: canary
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
