@@ -1,0 +1,32 @@
+
+groups:
+  - name: ai-mdmp-alerts
+    rules:
+      - alert: MonitoringServiceDown
+        expr: up{job="ai-mdmp-monitor"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "AI-MDMP monitoring service is down"
+
+      - alert: HighRequestLatency
+        expr: |
+          rate(monitor_request_latency_seconds_sum[5m])
+          /
+          rate(monitor_request_latency_seconds_count[5m])
+          > 1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Average monitoring request latency exceeds 1 second"
+
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(monitor_request_errors_total[5m])) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Monitoring service error rate exceeds 0.1 errors per second"
