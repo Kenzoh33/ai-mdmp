@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    env:
+      LLM_MOCK: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: pytest
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          for svc in api deployer monitor; do
+            docker build -f services/$svc/Dockerfile -t ai-mdmp-$svc:ci .
+          done
+          docker build -f models/sentiment/Dockerfile -t ai-mdmp-sentiment:ci .
+          docker build -f frontend/Dockerfile -t ai-mdmp-frontend:ci .

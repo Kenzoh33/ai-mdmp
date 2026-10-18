@@ -1,0 +1,4 @@
+# AI-MDMP
+.env
+.venv/
+.DS_Store
