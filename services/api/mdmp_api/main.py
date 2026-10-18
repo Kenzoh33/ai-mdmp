@@ -1,4 +1,6 @@
 from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
+import asyncio
 from common.llm import llm_client
 from services.api.mdmp_api.database import engine, Base
 
@@ -10,7 +12,13 @@ app = FastAPI(title="AI-MDMP API Service", version="1.0.0")
 def health_check():
     return {"status": "healthy", "service": "api"}
 
-@app.get("/api/v1/mock-llm-test")
-async def test_llm():
-    response = await llm_client.get_response("Are you running in mock mode?")
-    return {"llm_response": response}
+async def event_generator():
+    """Simulates live SSE events for the dashboard."""
+    yield "data: {\"event\": \"deployment\", \"message\": \"v1 promoted to stable\"}\n\n"
+    await asyncio.sleep(5)
+    yield "data: {\"event\": \"anomaly\", \"message\": \"High latency detected on v2 canary!\"}\n\n"
+
+@app.get("/api/v1/events")
+async def sse_events():
+    """SSE stream of deployment, anomaly, and rollback events."""
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
