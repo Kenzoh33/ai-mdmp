@@ -3,18 +3,18 @@
 
 import json
 import logging
-import time
 import os
-import urllib.request
+import time
 import urllib.error
-from datetime import datetime, timezone
+import urllib.request
+from datetime import UTC, datetime
 
 from fastapi import FastAPI, Request
 from fastapi.responses import Response
 from prometheus_client import (
+    CONTENT_TYPE_LATEST,
     Counter,
     Histogram,
-    CONTENT_TYPE_LATEST,
     generate_latest,
 )
 
@@ -35,7 +35,7 @@ logger.propagate = False
 def log_event(level, event, **details):
     """Write structured JSON logs to the terminal and Logstash."""
     record = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "service": "ai-mdmp-monitor",
         "event": event,
         **details,

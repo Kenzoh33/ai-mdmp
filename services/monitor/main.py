@@ -1,6 +1,6 @@
 from fastapi import FastAPI
-from prometheus_client import Counter, generate_latest
 from fastapi.responses import Response
+from prometheus_client import Counter, generate_latest
 
 app = FastAPI()
 
