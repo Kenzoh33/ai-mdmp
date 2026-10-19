@@ -1,0 +1,129 @@
+name: CD
+
+# Build images, push them to GHCR tagged with the commit SHA, then prove the deploy loop on a
+# throwaway kind cluster: v1 stable -> v2 canary -> fake critical event -> automatic rollback.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # "Run workflow" in the Actions tab, on any branch
+
+permissions:
+  contents: read
+  packages: write # lets GITHUB_TOKEN push to ghcr.io; no extra secrets needed
+
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  INGRESS_NGINX_VERSION: controller-v1.15.1
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        include:
+          - { image: sentiment, variant: v1 }
+          - { image: sentiment, variant: v2 }
+          - { image: sentiment, variant: v3 }
+          - { image: deployer, variant: "" }
+    env:
+      IMAGE_KIND: ${{ matrix.image }}
+      VARIANT: ${{ matrix.variant }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push
+        run: |
+          # GHCR needs a lowercase owner; tags are the commit SHA, never latest.
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          if [ "$IMAGE_KIND" = sentiment ]; then
+            image="$REGISTRY/$owner/ai-mdmp-sentiment:$VARIANT-$GITHUB_SHA"
+            docker build -f models/sentiment/Dockerfile --build-arg VARIANT="$VARIANT" -t "$image" .
+          else
+            image="$REGISTRY/$owner/ai-mdmp-deployer:$GITHUB_SHA"
+            docker build -f services/deployer/Dockerfile -t "$image" .
+          fi
+          docker push "$image"
+
+  smoke:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install "httpx>=0.27"
+
+      - name: Image names
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          prefix="$REGISTRY/$owner"
+          {
+            echo "DEPLOYER_IMAGE=$prefix/ai-mdmp-deployer:$GITHUB_SHA"
+            echo "MODEL_IMAGE_TEMPLATE=$prefix/ai-mdmp-{model}:{version}-$GITHUB_SHA"
+            echo "SENTIMENT_IMAGES=$prefix/ai-mdmp-sentiment:v1-$GITHUB_SHA $prefix/ai-mdmp-sentiment:v2-$GITHUB_SHA $prefix/ai-mdmp-sentiment:v3-$GITHUB_SHA"
+          } >> "$GITHUB_ENV"
+
+      - uses: helm/kind-action@v1.15.0
+        with:
+          cluster_name: mdmp
+          config: k8s/kind-config.yaml
+
+      - name: Install ingress-nginx
+        run: |
+          kubectl apply -f "https://raw.githubusercontent.com/kubernetes/ingress-nginx/$INGRESS_NGINX_VERSION/deploy/static/provider/kind/deploy.yaml"
+          # The admission webhook rejects Ingress objects until its setup jobs have finished.
+          kubectl -n ingress-nginx wait --for=condition=complete job --all --timeout=180s
+          kubectl -n ingress-nginx wait --for=condition=ready pod \
+            -l app.kubernetes.io/component=controller --timeout=180s
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Load images into kind
+        # Pull with the runner's GHCR login, then copy into the kind node. The node never pulls
+        # from GHCR itself, so private packages need no imagePullSecret.
+        run: |
+          for image in $SENTIMENT_IMAGES $DEPLOYER_IMAGE; do
+            docker pull "$image"
+            kind load docker-image "$image" --name mdmp
+          done
+
+      - name: Deploy the deployer
+        run: |
+          kubectl apply -f k8s/namespaces.yaml
+          # SQLite inside the pod is enough for a smoke test; the demo cluster uses Postgres.
+          kubectl -n mdmp-platform create secret generic deployer-db \
+            --from-literal=DATABASE_URL=sqlite:////tmp/deployer.db
+          kubectl apply -f k8s/platform/deployer.yaml
+          kubectl -n mdmp-platform set image deployment/deployer deployer="$DEPLOYER_IMAGE"
+          kubectl -n mdmp-platform set env deployment/deployer \
+            MODEL_IMAGE_TEMPLATE="$MODEL_IMAGE_TEMPLATE" LLM_MOCK=true
+          kubectl -n mdmp-platform rollout status deployment/deployer --timeout=180s
+
+      - name: Smoke test
+        run: |
+          kubectl -n mdmp-platform port-forward svc/deployer 8001:8000 > /tmp/port-forward.log 2>&1 &
+          for _ in $(seq 30); do curl -sf localhost:8001/health && break; sleep 1; done
+          bash k8s/smoke-test.sh
+
+      - name: Debug output
+        if: failure()
+        run: |
+          kubectl get all -A || true
+          kubectl -n mdmp-models describe pods || true
+          kubectl -n mdmp-platform logs deployment/deployer --tail=200 || true
+          kubectl -n ingress-nginx logs deployment/ingress-nginx-controller --tail=100 || true
+          cat /tmp/port-forward.log || true
