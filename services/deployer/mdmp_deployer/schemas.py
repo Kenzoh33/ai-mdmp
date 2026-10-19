@@ -56,3 +56,13 @@ class AnomalyResult(BaseModel):
     deployment_id: str
     anomaly_id: int
     rollback_id: int | None = None
+
+
+class RiskOut(BaseModel):
+    model: str
+    version: str
+    risk_level: Literal["low", "medium", "high"]
+    recommended_initial_weight: int
+    reasoning: str
+    source: Literal["llm", "heuristic"]
+    history: dict[str, int | bool]

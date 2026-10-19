@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from common.schemas import AnomalyEvent
 from mdmp_deployer.errors import DeployerError
+from mdmp_deployer.history import build_history
 from mdmp_deployer.k8s import KubeClient, KubernetesClient
 from mdmp_deployer.logs import logger
 from mdmp_deployer.policy import decide
@@ -17,6 +18,7 @@ from mdmp_deployer.schemas import (
     AnomalyResult,
     DeploymentCreate,
     DeploymentOut,
+    RiskOut,
     RollbackRequest,
     ScaleRequest,
     WeightRequest,
@@ -54,7 +56,8 @@ def get_deployer(
     session: Annotated[Session, Depends(get_session)],
     kube: Annotated[KubeClient, Depends(get_kube)],
 ) -> Deployer:
-    return Deployer(session, kube, request.app.state.settings, request.app.state.clock)
+    state = request.app.state
+    return Deployer(session, kube, state.settings, state.clock, state.metrics)
 
 
 DeployerDep = Annotated[Deployer, Depends(get_deployer)]
@@ -106,6 +109,22 @@ def promote(deployment_id: str, deployer: DeployerDep) -> DeploymentOut:
 def rollback(deployment_id: str, body: RollbackRequest, deployer: DeployerDep) -> DeploymentOut:
     deployer.rollback(deployment_id, body.reason)
     return DeploymentOut.model_validate(deployer.get(deployment_id))
+
+
+@router.get("/feedback/risk", response_model=RiskOut)
+async def feedback_risk(model: str, version: str, request: Request, session: SessionDep) -> RiskOut:
+    """Risk of deploying `version` next, from this model's deployment history."""
+    history = build_history(session, model, version)
+    assessment = await request.app.state.risk_advisor.assess(history)
+    return RiskOut(
+        model=model,
+        version=version,
+        risk_level=assessment.risk_level,
+        recommended_initial_weight=assessment.recommended_initial_weight,
+        reasoning=assessment.reasoning,
+        source=assessment.source,
+        history=history.counts(),
+    )
 
 
 def _naive_utc(value: datetime) -> datetime:
@@ -171,7 +190,7 @@ def receive_anomaly(event: AnomalyEvent, request: Request, session: SessionDep) 
     rollback_id = None
     if decision.action == "rollback":
         # Kube is resolved only here, so recording events works without a cluster.
-        deployer = Deployer(session, get_kube(request), state.settings, clock)
+        deployer = Deployer(session, get_kube(request), state.settings, clock, state.metrics)
         reason = (
             f"automatic: {event.metric}={event.value:g} vs threshold {event.threshold:g} "
             f"({decision.reason})"
