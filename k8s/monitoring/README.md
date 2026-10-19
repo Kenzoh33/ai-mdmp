@@ -235,3 +235,58 @@ Not yet configured:
 - Elasticsearch and Logstash centralized logging
 - External alert notification delivery
 - Automated production deployment of the monitoring stack
+
+## Centralized Logging with Elasticsearch and Logstash
+
+The AI-MDMP monitoring service uses Elasticsearch and Logstash for centralized application logging.
+
+### Components
+
+- **FastAPI:** Generates structured JSON logs for application requests and errors.
+- **Logstash:** Receives HTTP logs on port 8080, parses JSON, and forwards events to Elasticsearch.
+- **Elasticsearch:** Stores searchable application logs in the `ai-mdmp-logs` index.
+
+### Prerequisites
+
+Docker Desktop must be running. The Docker network `ai-mdmp-network` must exist.
+
+### Start Elasticsearch
+
+```powershell
+docker run -d --name ai-mdmp-elasticsearch --network ai-mdmp-network -p 127.0.0.1:9200:9200 --memory=1500m -e "discovery.type=single-node" -e "xpack.security.enabled=false" -e "xpack.ml.enabled=false" -e "ES_JAVA_OPTS=-Xms512m -Xmx512m" docker.elastic.co/elasticsearch/elasticsearch:8.17.10
+```
+
+### Start Logstash
+
+Run this command from the project root:
+
+```powershell
+docker run -d --name ai-mdmp-logstash --network ai-mdmp-network -p 127.0.0.1:8080:8080 --memory=1000m -e "LS_JAVA_OPTS=-Xms256m -Xmx256m" -e "XPACK_MONITORING_ENABLED=false" -v "${PWD}/k8s/monitoring/logstash/pipeline.conf:/usr/share/logstash/pipeline/logstash.conf:ro" docker.elastic.co/logstash/logstash:8.17.10
+```
+
+Wait for the Logstash pipeline to start.
+
+### Run FastAPI with Logging Enabled
+
+```powershell
+$env:LOGSTASH_URL = "http://127.0.0.1:8080"
+python -m uvicorn services.monitor.mdmp_monitor.main:app --host 127.0.0.1 --port 8001
+```
+
+### Test Logging
+
+In another PowerShell terminal:
+
+```powershell
+curl.exe http://127.0.0.1:8001/health
+curl.exe "http://localhost:9200/ai-mdmp-logs/_search?sort=@timestamp:desc&size=1&pretty"
+```
+
+The Elasticsearch response should contain an event named `request_completed` with path `/health` and status code `200`.
+
+### Notes
+
+- Logging to Elasticsearch is optional. Without `LOGSTASH_URL`, logs still appear in the FastAPI terminal.
+- Elasticsearch security is disabled for local development only. Do not expose this configuration to the public internet.
+- Log forwarding is synchronous and intended for development/testing rather than production use.
+- Elasticsearch and Logstash require substantial memory. Ensure Docker Desktop has sufficient resources.
