@@ -4,6 +4,9 @@
 import json
 import logging
 import time
+import os
+import urllib.request
+import urllib.error
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, Request
@@ -30,15 +33,37 @@ logger.propagate = False
 
 
 def log_event(level, event, **details):
-    """Write structured JSON logs to the terminal."""
+    """Write structured JSON logs to the terminal and Logstash."""
     record = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "service": "ai-mdmp-monitor",
         "event": event,
         **details,
     }
+
+    # Keep existing terminal logging
     logger.log(level, json.dumps(record))
 
+    # Forward logs to Logstash when configured
+    logstash_url = os.getenv("LOGSTASH_URL")
+
+    if logstash_url:
+        try:
+            data = json.dumps(record).encode("utf-8")
+
+            request = urllib.request.Request(
+                logstash_url,
+                data=data,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+
+            urllib.request.urlopen(request, timeout=0.5).close()
+
+        except (urllib.error.URLError, TimeoutError, OSError) as error:
+            logger.warning(
+                "Could not forward log to Logstash: %s", error
+            )
 
 # Count monitoring requests
 request_counter = Counter(
