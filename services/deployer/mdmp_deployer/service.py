@@ -20,8 +20,9 @@ from mdmp_deployer.manifests import (
     canary_ingress_name,
     object_name,
 )
+from mdmp_deployer.metrics import MetricsSource
 from mdmp_deployer.schemas import DeploymentCreate
-from mdmp_deployer.tables import Deployment, ModelVersion, Rollback
+from mdmp_deployer.tables import Deployment, DeploymentMetric, ModelVersion, Rollback
 
 
 def active_deployment(session: Session, model: str, track: str) -> Deployment | None:
@@ -57,14 +58,37 @@ class Deployer:
         kube: KubeClient,
         settings: Settings,
         clock: Callable[[], datetime],
+        metrics: MetricsSource | None = None,
     ) -> None:
         self.session = session
         self.kube = kube
         self.settings = settings
         self.clock = clock
+        self.metrics = metrics
 
     def get(self, deployment_id: str) -> Deployment:
         return get_deployment(self.session, deployment_id)
+
+    def _record_metrics(self, dep: Deployment) -> None:
+        """Store the version's current metrics for the history. Never blocks the operation."""
+        if self.metrics is None:
+            return
+        try:
+            values = self.metrics.snapshot(dep.model, dep.version)
+        except Exception as exc:
+            logger.warning("metrics snapshot failed: %s", exc, extra=log_fields(dep))
+            return
+        now = self.clock()
+        for metric, value in values.items():
+            self.session.add(
+                DeploymentMetric(
+                    deployment_id=dep.id,
+                    metric=metric,
+                    value=value,
+                    source="prometheus",
+                    recorded_at=now,
+                )
+            )
 
     def _model_version(self, model: str, version: str) -> ModelVersion:
         mv = self.session.scalar(
@@ -175,6 +199,7 @@ class Deployer:
         self._require_canary(dep)
         stable = active_deployment(self.session, dep.model, "stable")
         replicas = stable.replicas if stable else dep.replicas
+        self._record_metrics(dep)  # before the canary pods go away
         # Stable rolls to the canary's version first; the old pods keep serving until the new
         # ones pass readiness, so removing the canary afterwards drops no traffic.
         self._apply_track(dep.model, dep.version, "stable", replicas)
@@ -200,6 +225,7 @@ class Deployer:
         dep = self.get(deployment_id)
         self._require_active(dep)
         now = self.clock()
+        self._record_metrics(dep)
 
         if dep.track == "canary":
             self._remove_canary(dep.model)

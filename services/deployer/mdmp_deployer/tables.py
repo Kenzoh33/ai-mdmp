@@ -88,3 +88,16 @@ class Rollback(Base):
     automatic: Mapped[bool] = mapped_column(Boolean, default=False)
     anomaly_id: Mapped[int | None] = mapped_column(ForeignKey("anomaly_events.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class DeploymentMetric(Base):
+    """Metric values captured from Prometheus when a deployment is promoted or rolled back."""
+
+    __tablename__ = "deployment_metrics"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    deployment_id: Mapped[str] = mapped_column(ForeignKey("deployments.id"), index=True)
+    metric: Mapped[str] = mapped_column(String(32))
+    value: Mapped[float] = mapped_column(Float)
+    source: Mapped[str] = mapped_column(String(16))
+    recorded_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

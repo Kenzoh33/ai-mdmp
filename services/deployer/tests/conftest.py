@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 from mdmp_deployer.config import Settings
 from mdmp_deployer.main import create_app
+from mdmp_deployer.risk import HeuristicAdvisor
 
 
 class FakeKube:
@@ -66,6 +67,8 @@ def make_settings(**overrides: Any) -> Settings:
         "rollout_poll_s": 0.0,
         "warning_window_s": 300.0,
         "cooldown_s": 120.0,
+        "prometheus_url": None,
+        "llm_timeout_s": 1.0,
         **overrides,
     }
     return Settings(**values)
@@ -91,8 +94,16 @@ def make_client(kube: FakeKube, clock: Clock) -> Callable[..., TestClient]:
     """App with the fake kube client and a fresh in-memory database; pass Settings overrides.
     Use the result as a context manager so the lifespan creates the tables."""
 
-    def _make(**overrides: Any) -> TestClient:
-        return TestClient(create_app(settings=make_settings(**overrides), kube=kube, clock=clock))
+    def _make(metrics: Any = None, risk_advisor: Any = None, **overrides: Any) -> TestClient:
+        app = create_app(
+            settings=make_settings(**overrides),
+            kube=kube,
+            clock=clock,
+            metrics=metrics,
+            # Never the real LLM advisor here: it could reach OpenAI if a key is set.
+            risk_advisor=risk_advisor or HeuristicAdvisor(),
+        )
+        return TestClient(app)
 
     return _make
 

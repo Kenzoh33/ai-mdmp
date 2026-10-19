@@ -5,3 +5,5 @@ pydantic>=2.7
 sqlalchemy>=2.0
 kubernetes>=31.0
 psycopg[binary]>=3.2
+# common/llm.py (shared LLM client) imports it.
+openai>=1.40

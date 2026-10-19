@@ -14,6 +14,8 @@ class Settings:
     rollout_poll_s: float
     warning_window_s: float
     cooldown_s: float
+    prometheus_url: str | None
+    llm_timeout_s: float
 
 
 def load_settings() -> Settings:
@@ -27,4 +29,7 @@ def load_settings() -> Settings:
         rollout_poll_s=float(os.getenv("ROLLOUT_POLL_SECONDS", "2")),
         warning_window_s=float(os.getenv("WARNING_WINDOW_SECONDS", "300")),
         cooldown_s=float(os.getenv("ROLLBACK_COOLDOWN_SECONDS", "120")),
+        # Unset = no metric snapshots; history then uses anomaly event values only.
+        prometheus_url=os.getenv("PROMETHEUS_URL") or None,
+        llm_timeout_s=float(os.getenv("LLM_TIMEOUT_SECONDS", "15")),
     )
