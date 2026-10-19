@@ -1,0 +1,50 @@
+# Routes http://localhost/models/sentiment/<path> to the model's /<path>.
+# The canary Ingress must use the same host and path as the main one. ingress-nginx then
+# sends canary-weight percent of requests to the canary Service. Non-canary annotations on the
+# canary Ingress are ignored and taken from the main Ingress, so the rewrite lives only here.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sentiment
+  namespace: mdmp-models
+  labels:
+    app: sentiment
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: /models/sentiment(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: sentiment-stable
+                port:
+                  name: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sentiment-canary
+  namespace: mdmp-models
+  labels:
+    app: sentiment
+    track: canary
+  annotations:
+    nginx.ingress.kubernetes.io/canary: "true"
+    nginx.ingress.kubernetes.io/canary-weight: "20"
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: /models/sentiment(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: sentiment-canary
+                port:
+                  name: http

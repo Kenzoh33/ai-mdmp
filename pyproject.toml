@@ -7,5 +7,7 @@ select = ["E", "F", "I", "B", "UP"]
 
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib"
-pythonpath = [".", "services/api", "services/deployer", "services/monitor", "models/sentiment"]
-testpaths = ["services", "models/sentiment", "tests"]
+pythonpath = [
+    ".", "services/api", "services/deployer", "services/monitor", "models/sentiment", "loadgen",
+]
+testpaths = ["services", "models/sentiment", "loadgen", "tests"]
