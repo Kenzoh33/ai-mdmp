@@ -2,5 +2,6 @@
 -r services/deployer/requirements.txt
 -r services/monitor/requirements.txt
 -r models/sentiment/requirements.txt
+-r loadgen/requirements.txt
 pytest>=8.0
 ruff>=0.6
