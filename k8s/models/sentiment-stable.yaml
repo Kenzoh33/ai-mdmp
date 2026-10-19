@@ -1,0 +1,73 @@
+# Stable track of the sentiment model. Apply after loading the image into kind:
+#   kind load docker-image ai-mdmp-sentiment:v1 --name mdmp
+#   kubectl apply -f k8s/models/sentiment-stable.yaml
+# The selector uses app + track only (not version): selectors are immutable, and a promote
+# changes the version label in place.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sentiment-stable
+  namespace: mdmp-models
+  labels:
+    app: sentiment
+    version: v1
+    track: stable
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: sentiment
+      track: stable
+  template:
+    metadata:
+      labels:
+        app: sentiment
+        version: v1
+        track: stable
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: /metrics
+    spec:
+      containers:
+        - name: sentiment
+          image: ai-mdmp-sentiment:v1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sentiment-stable
+  namespace: mdmp-models
+  labels:
+    app: sentiment
+    track: stable
+spec:
+  selector:
+    app: sentiment
+    track: stable
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
