@@ -4,6 +4,8 @@ import httpx
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
+from common.llm import llm_client
+
 app = FastAPI(title="AI-MDMP Advanced Features")
 
 
@@ -88,3 +90,29 @@ def monitoring_status():
             status_code=502,
             detail="Invalid response from Prometheus",
         ) from error
+
+
+@app.post("/canary/ai-recommendation")
+async def ai_canary_recommendation(data: CanaryRequest):
+    """Generate an AI explanation for a canary deployment decision."""
+    analysis = analyze_canary(data)
+
+    prompt = (
+        "You are an ML deployment advisor. "
+        "Analyze the following canary deployment metrics and "
+        "provide a concise recommendation for an ML engineer.\n"
+        f"Stable model metrics: {data.stable.model_dump()}\n"
+        f"Canary model metrics: {data.canary.model_dump()}\n"
+        f"Safety decision: {analysis['decision']}\n"
+        f"Decision reason: {analysis['reason']}\n"
+        "Explain the performance risks and suggest practical next steps. "
+        "Do not override the safety decision."
+    )
+
+    recommendation = await llm_client.get_response(prompt)
+
+    return {
+        "decision": analysis["decision"],
+        "reason": analysis["reason"],
+        "ai_recommendation": recommendation,
+    }

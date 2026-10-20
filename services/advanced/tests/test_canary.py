@@ -87,3 +87,25 @@ def test_prometheus_integration():
     assert response.status_code == 200
     assert response.json()["source"] == "prometheus"
     assert response.json()["targets"][0]["value"][1] == "1"
+
+
+def test_ai_canary_recommendation():
+    payload = {
+        "stable": {"error_rate": 0.02, "latency_ms": 100},
+        "canary": {"error_rate": 0.10, "latency_ms": 150},
+    }
+
+    async def mock_llm_response(prompt):
+        return "[MOCK MODE] Test recommendation"
+
+    with patch(
+        "services.advanced.main.llm_client.get_response",
+        new=mock_llm_response,
+    ):
+        response = client.post("/canary/ai-recommendation", json=payload)
+
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["decision"] == "rollback"
+    assert data["ai_recommendation"] == "[MOCK MODE] Test recommendation"
