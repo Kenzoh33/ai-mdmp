@@ -17,6 +17,9 @@ from prometheus_client import (
     Histogram,
     generate_latest,
 )
+from pydantic import BaseModel, Field
+
+from common.llm import llm_client
 
 app = FastAPI(title="AI-MDMP monitor")
 
@@ -142,3 +145,58 @@ def metrics():
         content=generate_latest(),
         media_type=CONTENT_TYPE_LATEST,
     )
+
+
+class AnomalyRequest(BaseModel):
+    error_rate: float = Field(ge=0, le=1)
+    latency_ms: float = Field(ge=0)
+    baseline_error_rate: float = Field(ge=0, le=1)
+    baseline_latency_ms: float = Field(gt=0)
+
+
+@app.post("/anomalies/analyze")
+async def analyze_anomaly(data: AnomalyRequest):
+    """Analyze monitoring metrics for potential anomalies."""
+
+    error_anomaly = data.error_rate > data.baseline_error_rate + 0.05
+    latency_anomaly = data.latency_ms > data.baseline_latency_ms * 1.2
+
+    anomaly_detected = error_anomaly or latency_anomaly
+
+    if error_anomaly and latency_anomaly:
+        severity = "high"
+    elif anomaly_detected:
+        severity = "medium"
+    else:
+        severity = "normal"
+
+    prompt = (
+        "You are an ML production monitoring assistant. "
+        "Analyze the following monitoring metrics and explain "
+        "potential anomalies and recommended next steps.\n"
+        f"Current error rate: {data.error_rate}\n"
+        f"Baseline error rate: {data.baseline_error_rate}\n"
+        f"Current latency (ms): {data.latency_ms}\n"
+        f"Baseline latency (ms): {data.baseline_latency_ms}\n"
+        f"Anomaly detected: {anomaly_detected}\n"
+        f"Severity: {severity}\n"
+        "Provide a concise explanation. Do not claim a root cause "
+        "without supporting evidence."
+    )
+
+    recommendation = await llm_client.get_response(prompt)
+
+    log_event(
+        logging.WARNING if anomaly_detected else logging.INFO,
+        "anomaly_analysis",
+        anomaly_detected=anomaly_detected,
+        severity=severity,
+    )
+
+    return {
+        "anomaly_detected": anomaly_detected,
+        "severity": severity,
+        "error_anomaly": error_anomaly,
+        "latency_anomaly": latency_anomaly,
+        "ai_analysis": recommendation,
+    }
