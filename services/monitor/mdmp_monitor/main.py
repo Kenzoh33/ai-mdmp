@@ -7,7 +7,9 @@ import time
 import urllib.error
 import urllib.request
 from datetime import UTC, datetime
+from typing import Literal
 
+import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import Response
 from prometheus_client import (
@@ -19,6 +21,9 @@ from prometheus_client import (
 from pydantic import BaseModel, Field
 
 from common.llm import llm_client
+from common.schemas import AnomalyEvent
+
+DEPLOYER_URL = os.getenv("DEPLOYER_URL", "http://localhost:8001")
 
 app = FastAPI(title="AI-MDMP monitor")
 
@@ -150,6 +155,27 @@ class AnomalyRequest(BaseModel):
     latency_ms: float = Field(ge=0)
     baseline_error_rate: float = Field(ge=0, le=1)
     baseline_latency_ms: float = Field(gt=0)
+    # When deployment_id is given, a detected anomaly is reported to the deployer.
+    deployment_id: str | None = None
+    model: str = "sentiment"
+    version: str = "v2"
+    track: Literal["stable", "canary"] = "canary"
+
+
+async def notify_deployer(event: AnomalyEvent) -> bool:
+    """Send an AnomalyEvent to the deployer, which decides whether to roll back."""
+    try:
+        async with httpx.AsyncClient(base_url=DEPLOYER_URL, timeout=30) as client:
+            response = await client.post(
+                "/internal/anomalies",
+                content=event.model_dump_json(),
+                headers={"content-type": "application/json"},
+            )
+        response.raise_for_status()
+        return True
+    except httpx.HTTPError as error:
+        log_event(logging.WARNING, "deployer_notify_failed", error=str(error))
+        return False
 
 
 @app.post("/anomalies/analyze")
@@ -191,10 +217,39 @@ async def analyze_anomaly(data: AnomalyRequest):
         severity=severity,
     )
 
+    deployer_notified = False
+    if anomaly_detected and data.deployment_id:
+        if error_anomaly:
+            metric, value, threshold = (
+                "error_rate",
+                data.error_rate,
+                data.baseline_error_rate + 0.05,
+            )
+        else:
+            metric, value, threshold = (
+                "p95_latency",
+                data.latency_ms / 1000,
+                data.baseline_latency_ms * 1.2 / 1000,
+            )
+        event = AnomalyEvent(
+            model=data.model,
+            version=data.version,
+            track=data.track,
+            deployment_id=data.deployment_id,
+            metric=metric,
+            value=value,
+            threshold=threshold,
+            severity="critical" if severity == "high" else "warning",
+            ai_summary=recommendation,
+            timestamp=datetime.now(UTC),
+        )
+        deployer_notified = await notify_deployer(event)
+
     return {
         "anomaly_detected": anomaly_detected,
         "severity": severity,
         "error_anomaly": error_anomaly,
         "latency_anomaly": latency_anomaly,
         "ai_analysis": recommendation,
+        "deployer_notified": deployer_notified,
     }
