@@ -81,10 +81,19 @@ jobs:
       - name: Install ingress-nginx
         run: |
           kubectl apply -f "https://raw.githubusercontent.com/kubernetes/ingress-nginx/$INGRESS_NGINX_VERSION/deploy/static/provider/kind/deploy.yaml"
-          # The admission webhook rejects Ingress objects until its setup jobs have finished.
-          kubectl -n ingress-nginx wait --for=condition=complete job --all --timeout=180s
+          # The admission webhook rejects Ingress objects until its setup jobs have finished. Those
+          # jobs delete themselves on completion (ttlSecondsAfterFinished: 0), so waiting on them
+          # races; wait on what they leave behind instead: a ready controller (needs the cert secret)
+          # and the CA bundle the patch job writes into the webhook.
           kubectl -n ingress-nginx wait --for=condition=ready pod \
             -l app.kubernetes.io/component=controller --timeout=180s
+          for _ in $(seq 60); do
+            ca=$(kubectl get validatingwebhookconfiguration ingress-nginx-admission \
+              -o jsonpath='{.webhooks[0].clientConfig.caBundle}')
+            [ -n "$ca" ] && break
+            sleep 2
+          done
+          [ -n "$ca" ] || { echo "ingress-nginx admission webhook has no CA bundle"; exit 1; }
 
       - uses: docker/login-action@v3
         with:
