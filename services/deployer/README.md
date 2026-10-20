@@ -44,6 +44,7 @@ All settings come from environment variables (`mdmp_deployer/config.py`):
 | `MODELS_NAMESPACE` | `mdmp-models` | Namespace the model Deployments live in |
 | `MODEL_IMAGE_TEMPLATE` | `ai-mdmp-{model}:{version}` | Image name for a model version |
 | `IN_CLUSTER` | `false` | `true` uses the pod's ServiceAccount, otherwise kubeconfig |
+| `K8S_SIMULATE` | `false` | `true` logs Kubernetes actions instead of calling a cluster (demo without kind) |
 | `WARNING_WINDOW_SECONDS` / `ROLLBACK_COOLDOWN_SECONDS` | `300` / `120` | Policy timings |
 | `PROMETHEUS_URL` | unset | When set, canary metrics are snapshotted into history |
 | `LLM_MOCK` | | `true` returns a canned risk answer instead of calling OpenAI |
@@ -56,6 +57,9 @@ LLM_MOCK=true python -m pytest services/deployer
 
 # Locally against the kind cluster (uses your kubeconfig)
 PYTHONPATH=.:services/deployer uvicorn mdmp_deployer.main:app --port 8001
+
+# Without a cluster (simulated Kubernetes)
+K8S_SIMULATE=true LLM_MOCK=true PYTHONPATH=.:services/deployer uvicorn mdmp_deployer.main:app --port 8001
 ```
 
 In the cluster it runs from `k8s/platform/deployer.yaml` with a ServiceAccount and an RBAC Role

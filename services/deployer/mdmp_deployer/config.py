@@ -16,6 +16,7 @@ class Settings:
     cooldown_s: float
     prometheus_url: str | None
     llm_timeout_s: float
+    simulate_k8s: bool = False
 
 
 def load_settings() -> Settings:
@@ -32,4 +33,6 @@ def load_settings() -> Settings:
         # Unset = no metric snapshots; history then uses anomaly event values only.
         prometheus_url=os.getenv("PROMETHEUS_URL") or None,
         llm_timeout_s=float(os.getenv("LLM_TIMEOUT_SECONDS", "15")),
+        # true = log Kubernetes actions instead of calling a cluster (laptop demo without kind).
+        simulate_k8s=os.getenv("K8S_SIMULATE", "false").lower() == "true",
     )

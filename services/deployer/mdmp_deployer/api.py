@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from common.schemas import AnomalyEvent
 from mdmp_deployer.errors import DeployerError
 from mdmp_deployer.history import build_history
-from mdmp_deployer.k8s import KubeClient, KubernetesClient
+from mdmp_deployer.k8s import KubeClient, KubernetesClient, SimulatedKubeClient
 from mdmp_deployer.logs import logger
 from mdmp_deployer.policy import decide
 from mdmp_deployer.schemas import (
@@ -43,6 +43,8 @@ def get_session(request: Request) -> Iterator[Session]:
 def get_kube(request: Request) -> KubeClient:
     """Created on first use so the app starts (and tests run) without a cluster."""
     state = request.app.state
+    if state.kube is None and state.settings.simulate_k8s:
+        state.kube = SimulatedKubeClient(state.settings.namespace)
     if state.kube is None:
         try:
             state.kube = KubernetesClient(state.settings.namespace, state.settings.in_cluster)

@@ -2,6 +2,7 @@
 
 from typing import Any, Protocol
 
+from mdmp_deployer.logs import logger
 from mdmp_deployer.manifests import canary_annotations
 
 
@@ -11,6 +12,32 @@ class KubeClient(Protocol):
     def scale(self, name: str, replicas: int) -> None: ...
     def set_canary_weight(self, ingress_name: str, weight: int) -> None: ...
     def deployment_ready(self, name: str) -> bool: ...
+
+
+class SimulatedKubeClient:
+    """K8S_SIMULATE=true: logs each Kubernetes action instead of calling a cluster, and reports
+    every Deployment as ready. The database, policy and history run as usual."""
+
+    def __init__(self, namespace: str) -> None:
+        self.namespace = namespace
+
+    def _log(self, action: str) -> None:
+        logger.info(f"[simulated k8s] {action} in {self.namespace}")
+
+    def apply(self, body: dict[str, Any]) -> None:
+        self._log(f"apply {body['kind']}/{body['metadata']['name']}")
+
+    def delete(self, kind: str, name: str) -> None:
+        self._log(f"delete {kind}/{name}")
+
+    def scale(self, name: str, replicas: int) -> None:
+        self._log(f"scale Deployment/{name} to {replicas}")
+
+    def set_canary_weight(self, ingress_name: str, weight: int) -> None:
+        self._log(f"set canary weight on Ingress/{ingress_name} to {weight}%")
+
+    def deployment_ready(self, name: str) -> bool:
+        return True
 
 
 class KubernetesClient:

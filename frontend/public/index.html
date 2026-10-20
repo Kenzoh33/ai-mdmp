@@ -39,6 +39,31 @@
         <div class="tab-content border border-top-0 bg-white p-4" id="dashboardTabsContent">
             <!-- Deployments Tab -->
             <div class="tab-pane fade show active" id="deployments" role="tabpanel">
+                <h4>New Deployment</h4>
+                <form id="deploy-form" class="row g-2 align-items-end mb-4">
+                    <div class="col-auto">
+                        <label class="form-label" for="deploy-version">Version</label>
+                        <select class="form-select" id="deploy-version">
+                            <option value="v1">v1</option>
+                            <option value="v2">v2</option>
+                            <option value="v3">v3</option>
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <label class="form-label" for="deploy-strategy">Strategy</label>
+                        <select class="form-select" id="deploy-strategy">
+                            <option value="full">full</option>
+                            <option value="canary">canary</option>
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <label class="form-label" for="deploy-weight">Canary weight %</label>
+                        <input type="number" class="form-control" id="deploy-weight" min="0" max="100" value="20">
+                    </div>
+                    <div class="col-auto">
+                        <button type="submit" class="btn btn-primary" id="btn-deploy">Deploy</button>
+                    </div>
+                </form>
                 <h4>Active Deployments</h4>
                 <div id="deployments-list" class="mt-3">Loading deployments...</div>
             </div>
