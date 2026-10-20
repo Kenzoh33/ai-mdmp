@@ -1,4 +1,3 @@
-
 """AI-MDMP monitoring service."""
 
 import json
@@ -64,9 +63,8 @@ def log_event(level, event, **details):
             urllib.request.urlopen(request, timeout=0.5).close()
 
         except (urllib.error.URLError, TimeoutError, OSError) as error:
-            logger.warning(
-                "Could not forward log to Logstash: %s", error
-            )
+            logger.warning("Could not forward log to Logstash: %s", error)
+
 
 # Count monitoring requests
 request_counter = Counter(
