@@ -56,9 +56,7 @@ def analyze_canary(data: CanaryRequest):
 @app.get("/monitoring/status")
 def monitoring_status():
     """Read monitoring target health from Prometheus."""
-    prometheus_url = os.getenv(
-        "PROMETHEUS_URL", "http://localhost:9090"
-    )
+    prometheus_url = os.getenv("PROMETHEUS_URL", "http://localhost:9090")
 
     try:
         response = httpx.get(

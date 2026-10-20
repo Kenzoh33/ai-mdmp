@@ -7,6 +7,7 @@ from services.advanced.main import app
 
 client = TestClient(app)
 
+
 def test_health():
     response = client.get("/health")
     assert response.status_code == 200
@@ -68,17 +69,13 @@ def test_prometheus_integration():
             "data": {
                 "result": [
                     {
-                        "metric": {
-                            "job": "ai-mdmp-monitor"
-                        },
+                        "metric": {"job": "ai-mdmp-monitor"},
                         "value": [1234567890, "1"],
                     }
                 ]
             },
         },
-        request=httpx.Request(
-            "GET", "http://localhost:9090/api/v1/query"
-        ),
+        request=httpx.Request("GET", "http://localhost:9090/api/v1/query"),
     )
 
     with patch("services.advanced.main.httpx.get", return_value=mock_response):
