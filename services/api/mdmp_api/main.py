@@ -7,6 +7,7 @@ import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 
 from mdmp_api.database import Base, engine
 
@@ -23,6 +24,15 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="AI-MDMP API Service", version="1.0.0", lifespan=lifespan)
+
+# Allow the frontend on port 3000 to talk to this API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/health")
