@@ -94,7 +94,7 @@ function renderDeployments(deployments) {
 }
 
 function listenForLiveUpdates() {
-    const evtSource = new EventSource("/api/v1/events");
+    const eventSource = new EventSource('http://localhost:8000/api/v1/events');
     
     evtSource.onmessage = function(event) {
         const data = JSON.parse(event.data);
